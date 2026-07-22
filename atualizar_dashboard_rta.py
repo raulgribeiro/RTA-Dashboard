@@ -1,9 +1,10 @@
 """
-Atualizar dashboard RTA a partir da planilha Excel
-====================================================
+Atualizar dashboard RTA a partir das planilhas Excel de origem
+=================================================================
 
 O que este script faz:
-  1. Le a planilha Excel (abas "Unidade" e "Dados").
+  1. Le as DUAS planilhas de origem: Unidade e Dados (cada uma pode
+     estar na pasta indicada, ou voce pode apontar direto pro arquivo).
   2. Converte os dados para o formato usado pelo dashboard HTML.
   3. Substitui APENAS os dois blocos de dados (unidadeRaw / dadosRaw)
      dentro do arquivo HTML, mantendo todo o resto do arquivo
@@ -14,33 +15,36 @@ Como usar
 1. Instale as dependencias (uma unica vez):
        pip install openpyxl
 
-2. Rode o script apontando para a planilha e o HTML:
-       python atualizar_dashboard_rta.py --xlsx "CAMINHO\\DA\\PLANILHA.xlsx" --html "CAMINHO\\DO\\DASHBOARD.html"
+2. Rode o script apontando para as duas planilhas e o HTML:
+       python atualizar_dashboard_rta.py --unidade "CAMINHO\\Unidade" --dados "CAMINHO\\Dados" --html "CAMINHO\\DO\\DASHBOARD.html"
 
-   Exemplo com o seu caminho real:
+   Exemplo com os seus caminhos reais (pode apontar pra pasta OU pro
+   arquivo .xlsx especifico dentro dela):
        python atualizar_dashboard_rta.py ^
-           --xlsx "C:\\Users\\raulribeiro\\OneDrive - CLEALCO AÇÚCAR E ÁLCOOL S.A\\Compartilhados\\Base de dados RTA\\Dados Excel\\Base Final\\Base Juntada.xlsx" ^
-           --html "C:\\Users\\raulribeiro\\Desktop\\rta_dashboard.html"
+           --unidade "C:\\Users\\raulribeiro\\OneDrive - CLEALCO AÇÚCAR E ÁLCOOL S.A\\Compartilhados\\Base de dados RTA\\Dados Excel\\Unidade" ^
+           --dados "C:\\Users\\raulribeiro\\OneDrive - CLEALCO AÇÚCAR E ÁLCOOL S.A\\Compartilhados\\Base de dados RTA\\Dados Excel\\Dados" ^
+           --html "C:\\Users\\raulribeiro\\Documents\\GitHub\\App RTA\\index.html"
 
-3. O HTML sera atualizado no proprio arquivo (por padrao). Se quiser
-   gerar um arquivo novo em vez de sobrescrever, use --output:
-       python atualizar_dashboard_rta.py --xlsx "..." --html "..." --output "dashboard_atualizado.html"
+3. Rodando sem nenhum argumento (ex: botao "Run" do VS Code), o script
+   pergunta os caminhos na primeira vez e salva num config_dashboard_rta.json
+   ao lado do script -- nas proximas vezes, e so rodar de novo.
 
-Voce pode salvar esse comando num arquivo .bat (Windows) para so
-clicar duas vezes sempre que quiser atualizar. Exemplo de atualizar.bat:
+4. O HTML sera atualizado no proprio arquivo (por padrao). Se quiser
+   gerar um arquivo novo em vez de sobrescrever, use --output.
 
-    @echo off
-    python "C:\\caminho\\para\\atualizar_dashboard_rta.py" --xlsx "C:\\Users\\raulribeiro\\OneDrive - CLEALCO AÇÚCAR E ÁLCOOL S.A\\Compartilhados\\Base de dados RTA\\Dados Excel\\Base Final\\Base Juntada.xlsx" --html "C:\\caminho\\para\\rta_dashboard.html"
-    pause
+Requisitos das planilhas
+--------------------------
+Planilha "Unidade" precisa ter as colunas (em qualquer ordem, pelo nome
+do cabecalho, em qualquer aba): SERIAL, Emitente, Gestor aprovador,
+Data, Turno, Classificacao, Indicador, e a coluna de status de
+aprovacao (ParecerGestor ou Aprovou).
 
-Requisitos da planilha
------------------------
-Aba "Unidade" precisa ter as colunas (em qualquer ordem, pelo nome do
-cabecalho): SERIAL, Emitente, Gestor aprovador, Data, Turno,
-Classificacao, Indicador, Aprovou
+Planilha "Dados" precisa ter as colunas: RTA_SERIAL, ACAO, Responsavel,
+SITUACAO.
 
-Aba "Dados" precisa ter as colunas: RTA_SERIAL, ACAO, Responsavel,
-SITUACAO
+Modo legado (uma unica planilha com as duas abas "Unidade" e "Dados"):
+ainda funciona, use --xlsx "caminho\\Base Juntada.xlsx" no lugar de
+--unidade/--dados.
 """
 
 import argparse
@@ -203,6 +207,65 @@ def extract_dados(ws):
     return rows
 
 
+def escolher_aba(wb, candidatos_nomes, rotulo):
+    """Escolhe a aba certa dentro do workbook: tenta os nomes candidatos
+    (case-insensitive); se nenhum bater, usa a primeira aba do arquivo
+    (comum quando a planilha vem de uma exportacao tipo 'output')."""
+    normalizados = {sn.strip().lower(): sn for sn in wb.sheetnames}
+    for nome in candidatos_nomes:
+        key = nome.strip().lower()
+        if key in normalizados:
+            aba_real = normalizados[key]
+            print(f"  Aba usada para '{rotulo}': '{aba_real}'")
+            return wb[aba_real]
+    # fallback: primeira aba do arquivo
+    aba_real = wb.sheetnames[0]
+    print(f"  Aba usada para '{rotulo}': '{aba_real}' (primeira aba do arquivo)")
+    return wb[aba_real]
+
+
+def resolver_planilha(caminho: Path, rotulo: str) -> Path:
+    """Se 'caminho' for uma pasta, procura um unico .xlsx dentro dela
+    (ignorando arquivos temporarios de lock do Excel, tipo ~$arquivo.xlsx).
+    Se for um arquivo, apenas confirma que existe."""
+    if caminho.is_dir():
+        xlsxs = sorted(p for p in caminho.glob("*.xlsx") if not p.name.startswith("~$"))
+        if len(xlsxs) == 1:
+            print(f"AVISO: '{caminho}' e uma pasta. Encontrei um unico .xlsx: {xlsxs[0].name}")
+            return xlsxs[0].resolve()
+        elif len(xlsxs) > 1:
+            lista = "\n".join(f"  - {p.name}" for p in xlsxs)
+            sys.exit(
+                f"ERRO: a pasta de '{rotulo}' ({caminho}) tem mais de um .xlsx:\n{lista}\n\n"
+                "Informe o caminho completo do arquivo certo, incluindo o nome."
+            )
+        else:
+            sys.exit(f"ERRO: a pasta de '{rotulo}' ({caminho}) nao tem nenhum .xlsx dentro dela.")
+    elif not caminho.exists():
+        sys.exit(f"ERRO: planilha de '{rotulo}' nao encontrada em: {caminho}")
+    return caminho
+
+
+def abrir_planilha(caminho: Path, rotulo: str):
+    print(f"Lendo planilha ({rotulo}): {caminho}")
+    try:
+        return openpyxl.load_workbook(caminho, data_only=True)
+    except PermissionError:
+        sys.exit(
+            f"ERRO: nao consegui abrir a planilha de '{rotulo}':\n  {caminho}\n\n"
+            "Isso quase sempre significa que o arquivo esta aberto no Excel\n"
+            "(ou outro programa) no seu computador -- o Excel trava o arquivo\n"
+            "para leitura enquanto ele estiver aberto.\n\n"
+            "Feche a planilha no Excel e rode o script de novo."
+        )
+    except Exception as e:
+        sys.exit(f"ERRO ao abrir a planilha de '{rotulo}': {e}")
+
+
+UNIDADE_SHEET_CANDIDATOS = ["Unidade", "output"]
+DADOS_SHEET_CANDIDATOS = ["Dados", "output"]
+
+
 def update_html(html_path: Path, unidade_json: str, dados_json: str, output_path: Path):
     content = html_path.read_text(encoding="utf-8")
 
@@ -238,11 +301,16 @@ def carregar_config():
     return {}
 
 
-def salvar_config(xlsx, html, output):
-    dados = {"xlsx": str(xlsx), "html": str(html)}
+def salvar_config(unidade, dados, html, output, xlsx=None):
+    cfg = {"html": str(html)}
+    if xlsx:
+        cfg["xlsx"] = str(xlsx)
+    else:
+        cfg["unidade"] = str(unidade)
+        cfg["dados"] = str(dados)
     if output:
-        dados["output"] = str(output)
-    CONFIG_FILE.write_text(json.dumps(dados, ensure_ascii=False, indent=2), encoding="utf-8")
+        cfg["output"] = str(output)
+    CONFIG_FILE.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
     print(f"Caminhos salvos em: {CONFIG_FILE}")
     print("(da proxima vez, basta rodar o script sem digitar nada -- ele reusa esses caminhos)")
 
@@ -254,47 +322,58 @@ def perguntar_caminho(pergunta, valor_atual):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Atualiza o dashboard RTA (HTML) com dados de uma planilha Excel.")
-    parser.add_argument("--xlsx", required=False, default=None, help="Caminho da planilha Excel (Base Juntada.xlsx)")
+    parser = argparse.ArgumentParser(description="Atualiza o dashboard RTA (HTML) com dados das planilhas Excel.")
+    parser.add_argument("--unidade", required=False, default=None, help="Caminho da planilha (ou pasta) de Unidade")
+    parser.add_argument("--dados", required=False, default=None, help="Caminho da planilha (ou pasta) de Dados")
+    parser.add_argument("--xlsx", required=False, default=None,
+                         help="[Legado] Caminho de uma unica planilha com as abas 'Unidade' e 'Dados'")
     parser.add_argument("--html", required=False, default=None, help="Caminho do arquivo HTML do dashboard a atualizar")
     parser.add_argument("--output", required=False, default=None,
                          help="Caminho de saida (opcional). Se omitido, sobrescreve o proprio --html")
     args = parser.parse_args()
 
     config = carregar_config()
+    unidade_arg = args.unidade or config.get("unidade")
+    dados_arg = args.dados or config.get("dados")
     xlsx_arg = args.xlsx or config.get("xlsx")
     html_arg = args.html or config.get("html")
     output_arg = args.output or config.get("output")
 
-    # Se rodou sem nenhum argumento (ex: botao "Run" do VS Code) e nao ha config
-    # salva ainda, pergunta os caminhos interativamente e oferece salvar para as
-    # proximas vezes.
-    if not args.xlsx and not args.html:
+    # Se rodou sem nenhum argumento (ex: botao "Run" do VS Code) e nao ha
+    # config salva ainda, pergunta os caminhos interativamente.
+    sem_args_cli = not (args.unidade or args.dados or args.xlsx or args.html)
+    if sem_args_cli:
         print("Rodando sem parametros de linha de comando -- vou perguntar os caminhos.")
-        print("(Dica: voce tambem pode rodar com --xlsx \"...\" --html \"...\" pelo terminal)")
+        print("(Dica: voce tambem pode rodar com --unidade \"...\" --dados \"...\" --html \"...\" pelo terminal)")
         print("-" * 60)
-        xlsx_arg = perguntar_caminho("Caminho da planilha Excel", xlsx_arg)
+        if xlsx_arg and not (unidade_arg or dados_arg):
+            # config antiga (modo legado) -- so confirma, nao forca migrar
+            xlsx_arg = perguntar_caminho("Caminho da planilha Excel (Base Juntada)", xlsx_arg)
+        else:
+            unidade_arg = perguntar_caminho("Caminho da planilha/pasta de Unidade", unidade_arg)
+            dados_arg = perguntar_caminho("Caminho da planilha/pasta de Dados", dados_arg)
         html_arg = perguntar_caminho("Caminho do HTML do dashboard", html_arg)
-        if not xlsx_arg or not html_arg:
-            sys.exit("ERRO: preciso do caminho da planilha e do HTML para continuar.")
-        salvar_config(xlsx_arg, html_arg, output_arg)
 
-    if not xlsx_arg:
-        sys.exit("ERRO: informe --xlsx \"caminho\\da\\planilha.xlsx\"")
+        modo_legado_ok = xlsx_arg and not (unidade_arg and dados_arg)
+        modo_novo_ok = unidade_arg and dados_arg
+        if not html_arg or not (modo_legado_ok or modo_novo_ok):
+            sys.exit("ERRO: preciso dos caminhos das planilhas e do HTML para continuar.")
+        salvar_config(unidade_arg, dados_arg, html_arg, output_arg, xlsx=xlsx_arg if modo_legado_ok else None)
+
+    usar_legado = bool(xlsx_arg) and not (unidade_arg and dados_arg)
+
     if not html_arg:
         sys.exit("ERRO: informe --html \"caminho\\do\\dashboard.html\"")
+    if not usar_legado and not (unidade_arg and dados_arg):
+        sys.exit("ERRO: informe --unidade \"...\" e --dados \"...\" (ou --xlsx \"...\" no modo legado)")
 
-    xlsx_path = Path(xlsx_arg).resolve()
     html_path = Path(html_arg).resolve()
     output_path = Path(output_arg).resolve() if output_arg else html_path
 
-    print(f"Planilha (caminho completo): {xlsx_path}")
+    print("-" * 60)
     print(f"HTML de entrada (caminho completo): {html_path}")
     print(f"HTML de saida (caminho completo): {output_path}")
     print("-" * 60)
-
-    if not xlsx_path.exists():
-        sys.exit(f"ERRO: planilha nao encontrada em: {xlsx_path}")
 
     # Se apontou para uma PASTA em vez do arquivo .html, tenta descobrir
     # automaticamente qual .html usar.
@@ -312,41 +391,35 @@ def main():
                 f"ERRO: '{html_path}' e uma pasta (nao um arquivo), e tem mais de\n"
                 f"um .html dentro dela:\n{lista}\n\n"
                 "Informe o caminho completo do arquivo .html certo, incluindo o\n"
-                "nome do arquivo (ex: ...\\App RTA\\rta_dashboard.html)."
+                "nome do arquivo (ex: ...\\App RTA\\index.html)."
             )
         else:
             sys.exit(
                 f"ERRO: '{html_path}' e uma pasta (nao um arquivo) e nao tem\n"
                 "nenhum .html dentro dela. Informe o caminho completo do arquivo,\n"
-                "incluindo o nome (ex: ...\\App RTA\\rta_dashboard.html)."
+                "incluindo o nome (ex: ...\\App RTA\\index.html)."
             )
     elif not html_path.exists():
         sys.exit(f"ERRO: HTML nao encontrado em: {html_path}")
 
-    print(f"Lendo planilha: {xlsx_path}")
-    try:
-        wb = openpyxl.load_workbook(xlsx_path, data_only=True)
-    except PermissionError:
-        sys.exit(
-            f"ERRO: nao consegui abrir a planilha:\n  {xlsx_path}\n\n"
-            "Isso quase sempre significa que o arquivo esta aberto no Excel\n"
-            "(ou outro programa) no seu computador -- o Excel trava o arquivo\n"
-            "para leitura enquanto ele estiver aberto.\n\n"
-            "Feche a planilha no Excel e rode o script de novo."
-        )
-    except Exception as e:
-        sys.exit(f"ERRO ao abrir a planilha: {e}")
+    if usar_legado:
+        xlsx_path = resolver_planilha(Path(xlsx_arg).resolve(), "Base Juntada")
+        wb_unidade = abrir_planilha(xlsx_path, "Unidade+Dados")
+        wb_dados = wb_unidade
+    else:
+        unidade_path = resolver_planilha(Path(unidade_arg).resolve(), "Unidade")
+        dados_path = resolver_planilha(Path(dados_arg).resolve(), "Dados")
+        wb_unidade = abrir_planilha(unidade_path, "Unidade")
+        wb_dados = abrir_planilha(dados_path, "Dados")
 
-    if "Unidade" not in wb.sheetnames:
-        sys.exit(f"ERRO: a planilha nao tem uma aba chamada 'Unidade'. Abas encontradas: {wb.sheetnames}")
-    if "Dados" not in wb.sheetnames:
-        sys.exit(f"ERRO: a planilha nao tem uma aba chamada 'Dados'. Abas encontradas: {wb.sheetnames}")
+    ws_unidade = escolher_aba(wb_unidade, UNIDADE_SHEET_CANDIDATOS, "Unidade")
+    ws_dados = escolher_aba(wb_dados, DADOS_SHEET_CANDIDATOS, "Dados")
 
-    unidade = extract_unidade(wb["Unidade"])
-    dados = extract_dados(wb["Dados"])
+    unidade = extract_unidade(ws_unidade)
+    dados = extract_dados(ws_dados)
 
-    print(f"  -> {len(unidade)} RTAs (aba Unidade)")
-    print(f"  -> {len(dados)} acoes (aba Dados)")
+    print(f"  -> {len(unidade)} RTAs (Unidade)")
+    print(f"  -> {len(dados)} acoes (Dados)")
 
     unidade_json = json.dumps(unidade, ensure_ascii=False)
     dados_json = json.dumps(dados, ensure_ascii=False)
