@@ -53,6 +53,7 @@ import json
 import os
 import re
 import stat
+import subprocess
 import sys
 from pathlib import Path
 
@@ -321,6 +322,63 @@ def perguntar_caminho(pergunta, valor_atual):
     return resposta if resposta else valor_atual
 
 
+def encontrar_repo_git(caminho: Path):
+    """Sobe a partir de 'caminho' procurando uma pasta .git (raiz do repositorio).
+    Retorna o Path da raiz do repo, ou None se nao encontrar."""
+    atual = caminho if caminho.is_dir() else caminho.parent
+    for _ in range(8):
+        if (atual / ".git").exists():
+            return atual
+        if atual.parent == atual:
+            break
+        atual = atual.parent
+    return None
+
+
+def git_sincronizar(repo_dir: Path):
+    """Roda git add / commit / push na pasta do repositorio. Nunca trava o
+    script com erro fatal -- se algo der errado, so avisa e segue."""
+
+    def rodar(cmd):
+        try:
+            return subprocess.run(cmd, cwd=repo_dir, capture_output=True, text=True)
+        except FileNotFoundError:
+            return None
+
+    print("-" * 60)
+    print(f"Sincronizando com o GitHub (repositorio: {repo_dir})")
+
+    r = rodar(["git", "add", "."])
+    if r is None:
+        print("AVISO: nao encontrei o comando 'git'. Instale o Git for Windows")
+        print("(git-scm.com) se quiser que o script envie pro GitHub sozinho.")
+        return
+    if r.returncode != 0:
+        print("AVISO: 'git add' falhou:")
+        print((r.stdout + r.stderr).strip())
+        return
+
+    msg = f"Atualiza dados do dashboard - {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}"
+    r = rodar(["git", "commit", "-m", msg])
+    saida = (r.stdout + r.stderr).lower()
+    if r.returncode != 0:
+        if "nothing to commit" in saida or "nada a submeter" in saida or "nada para submeter" in saida:
+            print("Nenhuma mudanca nova para enviar (dados iguais aos ja publicados no GitHub).")
+            return
+        print("AVISO: 'git commit' falhou:")
+        print((r.stdout + r.stderr).strip())
+        return
+    print(f"Commit criado: \"{msg}\"")
+
+    r = rodar(["git", "push"])
+    if r.returncode != 0:
+        print("AVISO: 'git push' falhou. Mensagem do git:")
+        print((r.stdout + r.stderr).strip())
+        print("Voce pode resolver o problema e rodar 'git push' manualmente na pasta do repositorio.")
+        return
+    print("Enviado para o GitHub com sucesso! (o site publicado sera atualizado em alguns instantes)")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Atualiza o dashboard RTA (HTML) com dados das planilhas Excel.")
     parser.add_argument("--unidade", required=False, default=None, help="Caminho da planilha (ou pasta) de Unidade")
@@ -330,6 +388,8 @@ def main():
     parser.add_argument("--html", required=False, default=None, help="Caminho do arquivo HTML do dashboard a atualizar")
     parser.add_argument("--output", required=False, default=None,
                          help="Caminho de saida (opcional). Se omitido, sobrescreve o proprio --html")
+    parser.add_argument("--no-push", action="store_true",
+                         help="Nao enviar automaticamente para o GitHub (so atualiza o HTML localmente)")
     args = parser.parse_args()
 
     config = carregar_config()
@@ -490,6 +550,17 @@ def main():
     print("\nSe o navegador ainda mostrar os dados antigos, feche a aba e abra o")
     print("arquivo de novo (ou aperte Ctrl+F5) -- o navegador pode ter guardado")
     print("uma versao em cache da pagina.")
+
+    if not args.no_push:
+        repo_dir = encontrar_repo_git(output_path)
+        if repo_dir is None:
+            print("-" * 60)
+            print("AVISO: nao encontrei um repositorio git (.git) na pasta do HTML")
+            print("nem em nenhuma pasta acima dela. Pulei o envio automatico para o GitHub.")
+        else:
+            git_sincronizar(repo_dir)
+    else:
+        print("(--no-push usado: pulei o envio automatico para o GitHub)")
 
 
 if __name__ == "__main__":
