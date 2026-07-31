@@ -349,6 +349,18 @@ function toggleTheme(){
 
 aplicarTemaSalvo();
 render();
+
+// Sincroniza tema com o Portal OPEX via postMessage
+window.addEventListener('message', function(e) {
+  if (e.data && e.data.type === 'SET_THEME') {
+    var isLight = e.data.theme === 'light';
+    document.body.classList.toggle('light', isLight);
+    localStorage.setItem('rta_tema', isLight ? 'claro' : 'escuro');
+    document.getElementById('themeIcon').textContent = isLight ? '☀️' : '🌙';
+    document.getElementById('themeLabel').textContent = isLight ? 'Modo claro' : 'Modo escuro';
+    render();
+  }
+});
 </script>
 </body>
 </html>
