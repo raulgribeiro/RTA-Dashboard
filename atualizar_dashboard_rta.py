@@ -379,6 +379,28 @@ def git_sincronizar(repo_dir: Path):
     print("Enviado para o GitHub com sucesso! (o site publicado sera atualizado em alguns instantes)")
 
 
+def gerar_resumo_rta(unidade: list, html_path: Path):
+    """Gera resumo_rta.json com totais para o Sumário Executivo."""
+    total = len(unidade)
+    aprovados = sum(1 for r in unidade if str(r.get('Aprovou', '')).strip().lower() in ['aprovado', 'aprovada', 'sim', 'yes', 'aprovado '])
+    nao_aprovados = sum(1 for r in unidade if str(r.get('Aprovou', '')).strip().lower() in ['não aprovado', 'nao aprovado', 'não aprovada', 'nao aprovada'])
+    solicitar_ajuste = sum(1 for r in unidade if 'ajuste' in str(r.get('Aprovou', '')).lower())
+    taxa = round((aprovados / total * 100), 1) if total > 0 else 0
+
+    agora = datetime.datetime.now().strftime('%d/%m/%Y %H:%M')
+    resumo = {
+        'atualizado_em': agora,
+        'rta_total': total,
+        'rta_aprovados': aprovados,
+        'rta_nao_aprovados': nao_aprovados,
+        'rta_solicitar_ajuste': solicitar_ajuste,
+        'rta_taxa_aprovacao': taxa,
+    }
+    resumo_file = html_path.parent / 'resumo_rta.json'
+    resumo_file.write_text(json.dumps(resumo, ensure_ascii=False, indent=2), encoding='utf-8')
+    print(f"resumo_rta.json gerado: {total} RTAs, {taxa}% aprovação")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Atualiza o dashboard RTA (HTML) com dados das planilhas Excel.")
     parser.add_argument("--unidade", required=False, default=None, help="Caminho da planilha (ou pasta) de Unidade")
@@ -483,6 +505,9 @@ def main():
 
     unidade_json = json.dumps(unidade, ensure_ascii=False)
     dados_json = json.dumps(dados, ensure_ascii=False)
+
+    # Gera resumo_rta.json para o Sumário Executivo
+    gerar_resumo_rta(unidade, output_path)
 
     tamanho_antes = html_path.stat().st_size
     mtime_antes = html_path.stat().st_mtime

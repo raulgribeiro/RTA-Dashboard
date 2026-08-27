@@ -115,6 +115,11 @@ body.light .filters input[type=date]{background:#fff;color-scheme:light;}
 
   <div class="kpis" id="kpiRow"></div>
 
+  <div class="card wide" style="margin-bottom:20px;">
+    <h3>Evolução Mensal de RTAs</h3>
+    <div class="chart-wrap"><canvas id="chartEvolucao"></canvas></div>
+  </div>
+
   <div class="grid">
     <div class="card">
       <h3>Status de Aprovação (RTAs)</h3>
@@ -258,6 +263,33 @@ function render(){
     <div class="kpi"><div class="val">${acoesConcluidas}</div><div class="lbl">Ações Concluídas</div></div>
   `;
 
+  // Chart Evolucao Mensal (linha/area)
+  const mesesCount = {};
+  filtered.forEach(r=>{ if(r.Data){ const ym = r.Data.slice(0,7); mesesCount[ym]=(mesesCount[ym]||0)+1; } });
+  const mesesChaves = Object.keys(mesesCount).sort();
+  let evoLabels = [], evoValores = [];
+  if(mesesChaves.length){
+    let [anoIni, mesIni] = mesesChaves[0].split('-').map(Number);
+    let [anoFim, mesFim] = mesesChaves[mesesChaves.length-1].split('-').map(Number);
+    let a = anoIni, m = mesIni;
+    while(a < anoFim || (a === anoFim && m <= mesFim)){
+      const chave = `${a}-${String(m).padStart(2,'0')}`;
+      evoLabels.push(chave);
+      evoValores.push(mesesCount[chave] || 0);
+      m++; if(m > 12){ m = 1; a++; }
+    }
+  }
+  destroyChart('evolucao');
+  charts.evolucao = new Chart(document.getElementById('chartEvolucao'), {
+    type:'line',
+    data:{labels:evoLabels, datasets:[{label:'RTAs', data:evoValores,
+      borderColor:'#FCCC0A', backgroundColor:'rgba(252,204,10,0.25)', fill:true,
+      tension:0.35, pointBackgroundColor:'#FCCC0A', pointRadius:4, borderWidth:3}]},
+    options:{plugins:{legend:{display:false}}, responsive:true, maintainAspectRatio:false,
+      scales:{x:{ticks:{color:getThemeColors().text}, grid:{display:false}},
+        y:{ticks:{color:getThemeColors().text}, grid:{color:getThemeColors().grid}, beginAtZero:true}}}
+  });
+
   // Chart Aprovou (pie)
   const aprovCounts = {};
   filtered.forEach(r=>{ if(r.Aprovou) aprovCounts[r.Aprovou]=(aprovCounts[r.Aprovou]||0)+1; });
@@ -349,18 +381,6 @@ function toggleTheme(){
 
 aplicarTemaSalvo();
 render();
-
-// Sincroniza tema com o Portal OPEX via postMessage
-window.addEventListener('message', function(e) {
-  if (e.data && e.data.type === 'SET_THEME') {
-    var isLight = e.data.theme === 'light';
-    document.body.classList.toggle('light', isLight);
-    localStorage.setItem('rta_tema', isLight ? 'claro' : 'escuro');
-    document.getElementById('themeIcon').textContent = isLight ? '☀️' : '🌙';
-    document.getElementById('themeLabel').textContent = isLight ? 'Modo claro' : 'Modo escuro';
-    render();
-  }
-});
 </script>
 </body>
 </html>
