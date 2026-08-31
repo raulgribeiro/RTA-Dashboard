@@ -365,7 +365,7 @@ function render(){
 
 function aplicarTemaSalvo(){
   const salvo = localStorage.getItem('rta_tema');
-  const claro = salvo === 'claro';
+  const claro = salvo !== 'escuro';
   document.body.classList.toggle('light', claro);
   document.getElementById('themeIcon').textContent = claro ? '☀️' : '🌙';
   document.getElementById('themeLabel').textContent = claro ? 'Modo claro' : 'Modo escuro';
