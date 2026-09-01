@@ -364,16 +364,17 @@ function render(){
 }
 
 function aplicarTemaSalvo(){
-  const salvo = localStorage.getItem('rta_tema');
-  const claro = salvo !== 'escuro';
-  document.body.classList.toggle('light', claro);
-  document.getElementById('themeIcon').textContent = claro ? '☀️' : '🌙';
-  document.getElementById('themeLabel').textContent = claro ? 'Modo claro' : 'Modo escuro';
+  // Modo claro e sempre o padrao ao carregar a pagina (nao depende de
+  // preferencia salva no navegador, que muda entre arquivo local e site
+  // publicado). O botao ainda alterna o tema so para a visualizacao atual.
+  document.body.classList.remove('light');
+  document.body.classList.add('light');
+  document.getElementById('themeIcon').textContent = '☀️';
+  document.getElementById('themeLabel').textContent = 'Modo claro';
 }
 
 function toggleTheme(){
   const claro = document.body.classList.toggle('light');
-  localStorage.setItem('rta_tema', claro ? 'claro' : 'escuro');
   document.getElementById('themeIcon').textContent = claro ? '☀️' : '🌙';
   document.getElementById('themeLabel').textContent = claro ? 'Modo claro' : 'Modo escuro';
   render();
