@@ -364,17 +364,16 @@ function render(){
 }
 
 function aplicarTemaSalvo(){
-  // Modo claro e sempre o padrao ao carregar a pagina (nao depende de
-  // preferencia salva no navegador, que muda entre arquivo local e site
-  // publicado). O botao ainda alterna o tema so para a visualizacao atual.
-  document.body.classList.remove('light');
-  document.body.classList.add('light');
-  document.getElementById('themeIcon').textContent = '☀️';
-  document.getElementById('themeLabel').textContent = 'Modo claro';
+  const salvo = localStorage.getItem('rta_tema');
+  const claro = salvo !== 'escuro';
+  document.body.classList.toggle('light', claro);
+  document.getElementById('themeIcon').textContent = claro ? '☀️' : '🌙';
+  document.getElementById('themeLabel').textContent = claro ? 'Modo claro' : 'Modo escuro';
 }
 
 function toggleTheme(){
   const claro = document.body.classList.toggle('light');
+  localStorage.setItem('rta_tema', claro ? 'claro' : 'escuro');
   document.getElementById('themeIcon').textContent = claro ? '☀️' : '🌙';
   document.getElementById('themeLabel').textContent = claro ? 'Modo claro' : 'Modo escuro';
   render();
@@ -382,6 +381,18 @@ function toggleTheme(){
 
 aplicarTemaSalvo();
 render();
+
+// Sincroniza tema com o Portal OPEX via postMessage
+window.addEventListener('message', function(e) {
+  if (e.data && e.data.type === 'SET_THEME') {
+    var isLight = e.data.theme === 'light';
+    document.body.classList.toggle('light', isLight);
+    localStorage.setItem('rta_tema', isLight ? 'claro' : 'escuro');
+    document.getElementById('themeIcon').textContent = isLight ? '☀️' : '🌙';
+    document.getElementById('themeLabel').textContent = isLight ? 'Modo claro' : 'Modo escuro';
+    render();
+  }
+});
 </script>
 </body>
 </html>
