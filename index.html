@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <title>Relatorio de Tratamento de Anomalia</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
 :root{
   --bg:#0f1720; --bg2:#131c26; --card:#17212b; --card2:#1c2733; --accent:#00b894; --accent2:#0984e3;
@@ -74,6 +76,9 @@ body.light .filters input[type=date]{background:#fff;color-scheme:light;}
   </div>
   <div style="display:flex; align-items:center; gap:16px;">
     <div class="sub" id="lastUpdate"></div>
+    <button class="theme-toggle" id="btnExportar" onclick="exportarPDF()">
+      <span>📄</span> <span id="exportarLabel">Exportar PDF</span>
+    </button>
     <button class="theme-toggle" id="btnTheme" onclick="toggleTheme()">
       <span id="themeIcon">🌙</span> <span id="themeLabel">Modo escuro</span>
     </button>
@@ -377,6 +382,92 @@ function toggleTheme(){
   document.getElementById('themeIcon').textContent = claro ? '☀️' : '🌙';
   document.getElementById('themeLabel').textContent = claro ? 'Modo claro' : 'Modo escuro';
   render();
+}
+
+function exportarPDF(){
+  var btn = document.getElementById('btnExportar');
+  var label = document.getElementById('exportarLabel');
+  var textoOriginal = label.textContent;
+  label.textContent = 'Gerando PDF...';
+  btn.style.opacity = '0.6';
+  btn.style.pointerEvents = 'none';
+
+  var container = document.querySelector('.container');
+
+  // Expande temporariamente as tabelas com scroll interno para sair
+  // completas no PDF, em vez de cortadas na parte visivel.
+  var scrolls = container.querySelectorAll('.table-scroll');
+  var estilosOriginais = [];
+  scrolls.forEach(function(el){
+    estilosOriginais.push({el: el, maxHeight: el.style.maxHeight, overflow: el.style.overflowY});
+    el.style.maxHeight = 'none';
+    el.style.overflowY = 'visible';
+  });
+
+  var corFundo = getComputedStyle(document.body).getPropertyValue('background-color') || '#0f1720';
+
+  setTimeout(function(){
+    html2canvas(container, {
+      scale: 2,
+      backgroundColor: document.body.classList.contains('light') ? '#f4f6f8' : '#0f1720',
+      useCORS: true
+    }).then(function(canvas){
+      estilosOriginais.forEach(function(o){
+        o.el.style.maxHeight = o.maxHeight;
+        o.el.style.overflowY = o.overflow;
+      });
+
+      var imgData = canvas.toDataURL('image/png');
+      var jsPDFLib = window.jspdf.jsPDF;
+      var larguraPagina = 210, margem = 8;
+      var larguraUtil = larguraPagina - margem * 2;
+      var alturaImg = (canvas.height * larguraUtil) / canvas.width;
+      var pdf = new jsPDFLib('p', 'mm', 'a4');
+      var alturaPagina = 297 - margem * 2;
+      var alturaRestante = alturaImg;
+      var posY = margem;
+      var offsetFonte = 0;
+
+      if(alturaImg <= alturaPagina){
+        pdf.addImage(imgData, 'PNG', margem, margem, larguraUtil, alturaImg);
+      } else {
+        var pxPorMm = canvas.width / larguraUtil;
+        var alturaPaginaPx = alturaPagina * pxPorMm;
+        var yAtual = 0;
+        var primeira = true;
+        while(yAtual < canvas.height){
+          var fatiaAltura = Math.min(alturaPaginaPx, canvas.height - yAtual);
+          var canvasFatia = document.createElement('canvas');
+          canvasFatia.width = canvas.width;
+          canvasFatia.height = fatiaAltura;
+          var ctx = canvasFatia.getContext('2d');
+          ctx.drawImage(canvas, 0, yAtual, canvas.width, fatiaAltura, 0, 0, canvas.width, fatiaAltura);
+          var imgFatia = canvasFatia.toDataURL('image/png');
+          if(!primeira) pdf.addPage();
+          pdf.addImage(imgFatia, 'PNG', margem, margem, larguraUtil, (fatiaAltura * larguraUtil) / canvas.width);
+          yAtual += fatiaAltura;
+          primeira = false;
+        }
+      }
+
+      var agora = new Date();
+      var dataStr = agora.toLocaleDateString('pt-BR').split('/').join('-');
+      pdf.save('RTA_' + dataStr + '.pdf');
+
+      label.textContent = textoOriginal;
+      btn.style.opacity = '1';
+      btn.style.pointerEvents = 'auto';
+    }).catch(function(err){
+      estilosOriginais.forEach(function(o){
+        o.el.style.maxHeight = o.maxHeight;
+        o.el.style.overflowY = o.overflow;
+      });
+      alert('Nao foi possivel gerar o PDF: ' + err);
+      label.textContent = textoOriginal;
+      btn.style.opacity = '1';
+      btn.style.pointerEvents = 'auto';
+    });
+  }, 50);
 }
 
 aplicarTemaSalvo();
