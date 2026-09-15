@@ -126,6 +126,15 @@ def criar_driver():
 
 
 # ── DOWNLOAD DE UM RELATÓRIO ───────────────────────────────────────────────────
+def ja_logado(driver) -> bool:
+    """Verifica se já está autenticado (sem campos de login visíveis)."""
+    try:
+        driver.find_element(By.XPATH, "//input[@type='password']")
+        return False  # Achou campo de senha = não está logado
+    except Exception:
+        return True  # Sem campo de senha = já logado
+
+
 def baixar_relatorio(driver, wait, relatorio: dict) -> str:
     print(f"\n{'='*50}")
     print(f"📥 Baixando: {relatorio['nome']}")
@@ -133,22 +142,26 @@ def baixar_relatorio(driver, wait, relatorio: dict) -> str:
     driver.get(relatorio["url"])
     time.sleep(8)
 
-    # Login
-    login_input, senha_input = localizar_login_senha(driver)
-    if not login_input or not senha_input:
-        raise Exception("Não foi possível localizar campos de login.")
+    # Login — só faz se ainda não estiver logado
+    if not ja_logado(driver):
+        login_input, senha_input = localizar_login_senha(driver)
+        if not login_input or not senha_input:
+            raise Exception("Não foi possível localizar campos de login.")
 
-    driver.execute_script(
-        "arguments[0].value = arguments[1]; arguments[0].dispatchEvent(new Event('input'));",
-        login_input, LOGIN
-    )
-    driver.execute_script(
-        "arguments[0].value = arguments[1]; arguments[0].dispatchEvent(new Event('input'));",
-        senha_input, SENHA
-    )
-    senha_input.send_keys(Keys.ENTER)
-    print("✅ Login realizado")
-    time.sleep(12)
+        driver.execute_script(
+            "arguments[0].value = arguments[1]; arguments[0].dispatchEvent(new Event('input'));",
+            login_input, LOGIN
+        )
+        driver.execute_script(
+            "arguments[0].value = arguments[1]; arguments[0].dispatchEvent(new Event('input'));",
+            senha_input, SENHA
+        )
+        senha_input.send_keys(Keys.ENTER)
+        print("✅ Login realizado")
+        time.sleep(12)
+    else:
+        print("✅ Sessão já ativa — sem necessidade de novo login")
+        time.sleep(5)
 
     # Exportar
     icone_exportar = wait.until(
