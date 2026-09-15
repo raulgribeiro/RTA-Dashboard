@@ -1,0 +1,52 @@
+name: Atualizar RTA Dashboard
+
+on:
+  schedule:
+    # Roda todo dia às 09:00 horário de Brasília (12:00 UTC)
+    - cron: '0 12 * * *'
+  workflow_dispatch:  # Permite rodar manualmente pelo GitHub
+
+jobs:
+  atualizar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # 1. Clona o repositório
+      - name: Checkout repositório
+        uses: actions/checkout@v4
+
+      # 2. Configura Python
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # 3. Instala Chrome
+      - name: Instalar Chrome
+        uses: browser-actions/setup-chrome@v1
+
+      # 4. Instala dependências Python
+      - name: Instalar dependências
+        run: |
+          pip install selenium webdriver-manager openpyxl xlrd
+
+      # 5. Roda o script de download
+      - name: Baixar relatórios do Interact
+        env:
+          INTERACT_LOGIN: ${{ secrets.INTERACT_LOGIN }}
+          INTERACT_SENHA: ${{ secrets.INTERACT_SENHA }}
+        run: python interact_download.py
+
+      # 6. Roda o script de atualização do dashboard
+      - name: Atualizar dashboard RTA
+        run: python atualizar_dashboard_rta.py
+
+      # 7. Commit e push dos arquivos atualizados
+      - name: Commit e push
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add downloads/ resumo_rta.json index.html
+          git diff --cached --quiet || git commit -m "Auto-atualização RTA - $(date '+%d/%m/%Y %H:%M')"
+          git push
