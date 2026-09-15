@@ -40,7 +40,7 @@ jobs:
 
       # 6. Roda o script de atualização do dashboard
       - name: Atualizar dashboard RTA
-        run: python atualizar_dashboard_rta.py
+        run: python atualizar_dashboard_rta.py --unidade downloads/RTA_Unidade.xlsx --dados downloads/RTA_Dados.xlsx --html index.html --no-push
 
       # 7. Commit e push dos arquivos atualizados
       - name: Commit e push
