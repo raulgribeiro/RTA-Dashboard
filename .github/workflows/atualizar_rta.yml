@@ -2,7 +2,7 @@ name: Atualizar RTA Dashboard
 
 on:
   schedule:
-            - cron: '15 18 * * *'
+            - cron: '00 10 * * *'
   workflow_dispatch:
   
 jobs:
