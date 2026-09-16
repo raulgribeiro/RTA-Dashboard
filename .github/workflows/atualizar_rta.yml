@@ -3,7 +3,7 @@ name: Atualizar RTA Dashboard
 on:
   schedule:
     # Roda todo dia às 09:00 horário de Brasília (12:00 UTC)
-    - cron: '30 14 * * *'
+    - cron: '50 14 * * *'
   workflow_dispatch:  # Permite rodar manualmente pelo GitHub
 
 jobs:
