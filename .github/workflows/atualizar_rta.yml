@@ -2,55 +2,168 @@ name: Atualizar RTA Dashboard
 
 on:
   schedule:
-    # Roda diariamente às 09:00 no horário de São Paulo/Brasília
-    - cron: '0 9 * * *'
-      timezone: 'America/Sao_Paulo'
+    # 09:00 São Paulo = 12:00 UTC
+    - cron: '0 12 * * *'
 
-  workflow_dispatch: # Permite rodar manualmente pelo GitHub
+  workflow_dispatch:
 
 jobs:
   atualizar:
     permissions:
       contents: write
+
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
-      # 1. Clona o repositório
+
+      # ==========================================
+      # 1. CHECKOUT
+      # ==========================================
       - name: Checkout repositório
         uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+          fetch-depth: 0
 
-      # 2. Configura Python
+      # ==========================================
+      # 2. PYTHON
+      # ==========================================
       - name: Configurar Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      # 3. Instala Chrome
+      # ==========================================
+      # 3. CHROME
+      # ==========================================
       - name: Instalar Chrome
         uses: browser-actions/setup-chrome@v1
 
-      # 4. Instala dependências Python
+      # ==========================================
+      # 4. DEPENDÊNCIAS
+      # ==========================================
       - name: Instalar dependências
         run: |
+          python -m pip install --upgrade pip
           pip install selenium webdriver-manager openpyxl xlrd
 
-      # 5. Roda o script de download
+      # ==========================================
+      # 5. DOWNLOAD DO INTERACT
+      # ==========================================
       - name: Baixar relatórios do Interact
         env:
           INTERACT_LOGIN: ${{ secrets.INTERACT_LOGIN }}
           INTERACT_SENHA: ${{ secrets.INTERACT_SENHA }}
-        run: python interact_download.py
+        run: |
+          python interact_download.py
 
-      # 6. Roda o script de atualização do dashboard
+      # ==========================================
+      # 6. VALIDAR DOWNLOADS
+      # ==========================================
+      - name: Validar arquivos baixados
+        run: |
+          echo "=========================================="
+          echo "ARQUIVOS BAIXADOS"
+          echo "=========================================="
+
+          ls -lah downloads/
+
+          echo ""
+          echo "Validando RTA_Unidade.xlsx..."
+
+          if [ ! -f "downloads/RTA_Unidade.xlsx" ]; then
+            echo "ERRO: RTA_Unidade.xlsx não encontrado!"
+            exit 1
+          fi
+
+          echo "OK: RTA_Unidade.xlsx"
+
+          echo ""
+          echo "Validando RTA_Dados.xlsx..."
+
+          if [ ! -f "downloads/RTA_Dados.xlsx" ]; then
+            echo "ERRO: RTA_Dados.xlsx não encontrado!"
+            exit 1
+          fi
+
+          echo "OK: RTA_Dados.xlsx"
+
+      # ==========================================
+      # 7. ATUALIZAR DASHBOARD
+      # ==========================================
       - name: Atualizar dashboard RTA
-        run: python atualizar_dashboard_rta.py --unidade downloads/RTA_Unidade.xlsx --dados downloads/RTA_Dados.xlsx --html index.html --no-push
+        run: |
+          python atualizar_dashboard_rta.py \
+            --unidade "downloads/RTA_Unidade.xlsx" \
+            --dados "downloads/RTA_Dados.xlsx" \
+            --html "index.html" \
+            --no-push
 
-      # 7. Commit e push dos arquivos atualizados
+      # ==========================================
+      # 8. VALIDAR DASHBOARD
+      # ==========================================
+      - name: Validar atualização
+        run: |
+          echo "=========================================="
+          echo "STATUS DOS ARQUIVOS"
+          echo "=========================================="
+
+          git status
+
+          echo ""
+          echo "Alterações detectadas:"
+          git diff --stat
+
+          echo ""
+          echo "Verificando resumo_rta.json..."
+
+          if [ ! -f "resumo_rta.json" ]; then
+            echo "ERRO: resumo_rta.json não foi criado!"
+            exit 1
+          fi
+
+          echo "OK: resumo_rta.json"
+
+      # ==========================================
+      # 9. COMMIT E PUSH
+      # ==========================================
       - name: Commit e push
         run: |
+
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
-          git add downloads/ resumo_rta.json index.html
-          git diff --cached --quiet || git commit -m "Auto-atualização RTA - $(date '+%d/%m/%Y %H:%M')"
-          git push
+
+          git add downloads/
+          git add resumo_rta.json
+          git add index.html
+
+          echo "=========================================="
+          echo "ALTERAÇÕES PARA COMMIT"
+          echo "=========================================="
+
+          git status
+
+          if git diff --cached --quiet; then
+            echo ""
+            echo "Nenhuma alteração encontrada."
+            echo "Os dados baixados são iguais aos já publicados."
+          else
+
+            echo ""
+            echo "Criando commit..."
+
+            git commit \
+              -m "Auto-atualização RTA - $(date '+%d/%m/%Y %H:%M')"
+
+            echo ""
+            echo "Enviando para GitHub..."
+
+            git push
+
+            echo ""
+            echo "=========================================="
+            echo "ATUALIZAÇÃO CONCLUÍDA COM SUCESSO"
+            echo "=========================================="
+
+          fi
