@@ -1,4 +1,4 @@
-nname: Atualizar RTA Dashboard
+name: Atualizar RTA Dashboard
 
 'on':
   schedule:
