@@ -2,11 +2,9 @@ name: Atualizar RTA Dashboard
 
 on:
   schedule:
-    # 09:00 São Paulo = 12:00 UTC
-    - cron: '0 12 * * *'
-
+    - cron: '35 16 * * *'
   workflow_dispatch:
-
+  
 jobs:
   atualizar:
     permissions:
