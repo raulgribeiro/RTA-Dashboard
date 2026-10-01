@@ -207,6 +207,30 @@ def baixar_relatorio(driver, wait, relatorio: dict) -> str:
 
 
 # ── MAIN ───────────────────────────────────────────────────────────────────────
+def sair_interact(driver):
+    """Encerra a sessao no Interact para liberar a licenca."""
+    try:
+        base = driver.current_url.split("/sa/")[0]
+        for url in ("/sa/logout.jsp", "/sa/logoff.jsp"):
+            try:
+                driver.get(base + url)
+                time.sleep(2)
+            except Exception:
+                pass
+        driver.switch_to.default_content()
+        for txt in ("Sair", "Logout", "Logoff"):
+            for el in driver.find_elements(By.XPATH, f"//*[normalize-space(text())='{txt}']"):
+                try:
+                    el.click()
+                    time.sleep(2)
+                    print("   Sessao encerrada (" + txt + ")")
+                    return
+                except Exception:
+                    pass
+    except Exception as e:
+        print("   Aviso: nao foi possivel sair do Interact:", e)
+
+
 def main():
     driver = criar_driver()
     wait = WebDriverWait(driver, 40)
@@ -228,6 +252,7 @@ def main():
                     pass
                 erros.append(relatorio['nome'])
     finally:
+        sair_interact(driver)
         driver.quit()
 
     if erros:
