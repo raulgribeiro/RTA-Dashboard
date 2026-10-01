@@ -218,6 +218,14 @@ def main():
                 baixar_relatorio(driver, wait, relatorio)
             except Exception as e:
                 print(f"❌ Erro em {relatorio['nome']}: {e}")
+                try:  # diagnostico (repo publico: sem dados pessoais)
+                    print("   Diagnostico - URL:", driver.current_url.split("?")[0])
+                    print("   Diagnostico - titulo:", driver.title)
+                    print("   Diagnostico - campos de senha na tela:", len(driver.find_elements(By.XPATH, "//input[@type='password']")))
+                    linhas = [l.strip() for l in driver.find_element(By.TAG_NAME, "body").text.split("\n") if l.strip() and "@" not in l]
+                    print("   Diagnostico - texto:", " | ".join(linhas[:12])[:300])
+                except Exception:
+                    pass
                 erros.append(relatorio['nome'])
     finally:
         driver.quit()
