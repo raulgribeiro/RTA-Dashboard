@@ -75,6 +75,15 @@ STATUS_HEADER_CANDIDATOS = ["ParecerGestor", "Aprovou"]
 DADOS_COLS = ["RTA_SERIAL", "ACAO", "Responsavel", "SITUACAO"]
 
 
+def normalizar_tipo(v):
+    """Tipo de anomalia (RNC, RAF, BOLETIM, IT, Analise de Falha...).
+    Vazio, '-' ou 'null' significa RTA."""
+    if v is None:
+        return "RTA"
+    t = str(v).strip()
+    return "RTA" if t in ("", "-") or t.lower() == "null" else t
+
+
 def clean(v):
     """Converte valores do Excel para tipos simples (str/None), formata datas."""
     if v is None:
@@ -163,6 +172,14 @@ def extract_unidade(ws):
     header = [c.value for c in ws[1]]
     colmap = find_header_map(header, UNIDADE_COLS, "Unidade")
 
+    # Coluna Tipo e opcional: se a planilha antiga nao tiver, tudo vira RTA.
+    tipo_idx = None
+    for i, c in enumerate(header):
+        if c is not None and str(c).strip().lower() == "tipo":
+            tipo_idx = i
+            break
+    print(f"    {'Tipo':20s} -> " + (f"coluna {openpyxl.utils.get_column_letter(tipo_idx + 1)}" if tipo_idx is not None else "NAO ENCONTRADA (tudo sera RTA)"))
+
     status_nome, status_idx = find_status_column(header, STATUS_HEADER_CANDIDATOS)
     status_letra = openpyxl.utils.get_column_letter(status_idx + 1)
     print(f"    {'Status aprovacao':20s} -> coluna {status_letra}  (cabecalho: '{status_nome}')")
@@ -183,6 +200,7 @@ def extract_unidade(ws):
             "Data": clean(row[colmap["Data"]]),
             "Turno": clean(row[colmap["Turno"]]),
             "Classificacao": clean(row[colmap["Classificacao"]]),
+            "Tipo": normalizar_tipo(row[tipo_idx]) if tipo_idx is not None else "RTA",
             "Indicador": clean(row[colmap["Indicador"]]),
             "Aprovou": aprovou,
 
