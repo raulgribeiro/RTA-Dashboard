@@ -488,6 +488,7 @@ render();
 window.addEventListener('message', function(e) {
   if (e.data && e.data.type === 'SET_THEME') {
     var isLight = e.data.theme === 'light';
+    if (isLight === document.body.classList.contains('light')) return; // já está nesse tema: evita redesenhar os gráficos
     document.body.classList.toggle('light', isLight);
     localStorage.setItem('rta_tema', isLight ? 'claro' : 'escuro');
     document.getElementById('themeIcon').textContent = isLight ? '☀️' : '🌙';
